@@ -1,7 +1,8 @@
 import { ethers } from 'ethers'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createEscrow, getListEscrows, approveEscrow, getListEscrowsToApprove } from './actions'
 import Escrow from './Escrow'
+import contractAddresses from "./contractAddresses.json"
 
 function App () {
   const [escrows, setEscrows] = useState([])
@@ -12,39 +13,53 @@ function App () {
   const [signer, setSigner] = useState()
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('')
+  const [contractAddress, setContractAddress] = useState('')
+
+  const networkNames = Object.keys(contractAddresses).map(key => {
+    const obj = contractAddresses[key];
+    return <span key={key}>{obj.name}, </span>;
+  });
+
+  useEffect(() => {
+    console.log("Contract address updated: " + contractAddress);
+  }, [contractAddress]);
+
+  useEffect(() => {
+    console.log("Signer updated: " + signer);
+  }, [signer]);
 
   async function connectWallet () {
     const provider = new ethers.providers.Web3Provider(window.ethereum)
     await provider.send('eth_requestAccounts', [])
 
     const signerAccount = await provider.getSigner()
+    
     setSigner(signerAccount)
-    setAccount(await signerAccount.getAddress())
-    setBalance(ethers.utils.formatEther(await signerAccount.getBalance()))
+    setAccount(await signer.getAddress())
+    setBalance(ethers.utils.formatEther(await signer.getBalance()))
 
     // Check if you are on the right network
     // Localhost = 31337
-    // Goerli = 5
+    // sepolia = 11155111
     const networkId = await provider.getNetwork()
-    // console.log("NW.chainId" + networkId.chainId)
-    // console.log("env: " + process.env.REACT_APP_NETWORK_CHAINID)
-    if (networkId.chainId === parseInt(process.env.REACT_APP_NETWORK_CHAINID)) {
-      console.log(networkId.chainId)
+    if (contractAddresses.hasOwnProperty(networkId.chainId)) {
+      console.log("Correct Network!!")
+      setContractAddress(contractAddresses[networkId.chainId].contractAddress)
       setIsCorrectNetwork(true)
 
       // Get list personal escrows
-      const escrowsList = await getListEscrows(signerAccount)
-      setEscrows(escrowsList)
+      const escrowsList = await getListEscrows(signer, contractAddress)
+    setEscrows(escrowsList)
 
-      // Get list of escrows to approve
-      const escrowsListToApprove = await getListEscrowsToApprove(signerAccount)
-      setEscrowsToApprove(escrowsListToApprove)
+    const escrowsListToApprove = await getListEscrowsToApprove(signer, contractAddress)
+    setEscrowsToApprove(escrowsListToApprove)      
+
     }
   }
 
   async function approve (escrowId, signer) {
     try {
-      const tx = await approveEscrow(signer, escrowId)
+      const tx = await approveEscrow(signer, contractAddress, escrowId)
       await tx.wait()
       return {
         message: 'Contract approved',
@@ -64,7 +79,7 @@ function App () {
     const value = ethers.utils.parseEther(document.getElementById('wei').value, 'ether')
 
     try {
-      const tx = await createEscrow(signer, arbiter, beneficiary, value)
+      const tx = await createEscrow(signer, contractAddress, arbiter, beneficiary, value)
       await tx.wait()
       setMessage('Contract created')
       setMessageType('success')
@@ -75,18 +90,17 @@ function App () {
     }
 
     // Reload list of personal escrows and escrows to approve
-    const escrowsList = await getListEscrows(signer)
+    const escrowsList = await getListEscrows(signer, contractAddress)
     setEscrows(escrowsList)
 
-    const escrowsListToApprove = await getListEscrowsToApprove(signer)
+    const escrowsListToApprove = await getListEscrowsToApprove(signer, contractAddress)
     setEscrowsToApprove(escrowsListToApprove)
   }
 
   return (
     <div>
       <h1 className='text-center font-bold mt-4 text-2xl'>Escrow dApp</h1>
-      <p className='text-center'>More info about the project <a href='https://github.com/falconandrea/au-escrow-hardhat' title='' className='underline' target='_blank' rel='noreferrer'>here</a>.</p>
-
+      
       <div className='block p-6 rounded-lg shadow-lg bg-white mx-auto my-4 max-w-md'>
         {!account
           ? (
@@ -137,11 +151,11 @@ function App () {
                 />
               </div>
 
-              {!isCorrectNetwork &&
-                (
-                  <p className='text-red-400 text-center font-xs mb-8'>Warning: you are on a wrong network, switch on Goerli network and reload page!</p>
-                )}
-
+              {!isCorrectNetwork && (
+                <p className='text-red-400 text-center font-xs mb-8'>
+                      Warning: you are on the wrong network, switch to any one of these networks - [ {networkNames} ] and reload the page!
+                </p>
+              )}
               <button
                 className='w-full px-6 py-2 bg-blue-600 text-white font-medium text-xs leading-tight uppercase rounded shadow-md hover:bg-blue-700 hover:shadow-lg focus:bg-blue-700 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-blue-800 active:shadow-lg'
                 id='deploy'
@@ -188,8 +202,7 @@ function App () {
         </div>
       )}
 
-      <p className='text-center p-6'>2023 - <a className='underline' href='https://github.com/falconandrea/' title='' target='_blank' rel='noreferrer'>Andrea Falcon</a></p>
-    </div>
+      </div>
   )
 }
 

@@ -1,0 +1,10 @@
+{
+    "11155111": {
+        "name": "sepolia",
+        "contractAddress": "0x4a9983e844B06d5F3c7c1772EcDE0218c734d5d7"
+    },
+    "31337": {
+        "name": "localhost",
+        "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    }
+}
